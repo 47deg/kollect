@@ -29,8 +29,10 @@ interface DataSourceCache {
  */
 data class InMemoryCache(val state: Map<DataSourceIdentity, Any?>) : DataSourceCache {
 
+    constructor(vararg a: Tuple2<DataSourceIdentity, Any?>): this(toMap(*a))
+
     override fun <A> get(k: DataSourceIdentity): Option<A> =
-            Option.fromNullable(state[k] as A?)
+        Option.fromNullable(state[k] as A?)
 
     override fun <A> update(k: DataSourceIdentity, v: A): DataSourceCache =
         copy(state = state.plus(Pair(k, v)))
@@ -38,14 +40,8 @@ data class InMemoryCache(val state: Map<DataSourceIdentity, Any?>) : DataSourceC
     companion object {
         fun empty(): InMemoryCache = InMemoryCache(emptyMap())
 
-        fun apply(vararg results: Tuple2<DataSourceIdentity, Any?>): InMemoryCache =
-                InMemoryCache(results.fold(emptyMap(), { map, tuple2 -> map.plus(Pair(tuple2.a, tuple2.b))}))
+        fun toMap(vararg results: Tuple2<DataSourceIdentity, Any?>):  Map<DataSourceIdentity, Any?> =
+            results.fold(emptyMap(), { map, tuple2 -> map.plus(Pair(tuple2.a, tuple2.b))})
     }
-
-//    fun empty(): InMemoryCache =
-//            InMemoryCache(emptyMap())
-//
-//    fun combine(a: InMemoryCache, b: InMemoryCache): InMemoryCache =
-//            InMemoryCache(a.state.plus(b.state))
 
 }
