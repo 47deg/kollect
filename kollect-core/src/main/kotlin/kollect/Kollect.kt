@@ -8,12 +8,12 @@ import arrow.higherkind
 
 typealias Kollect<A> = Free<KollectOpHK, A>
 
-sealed class KollectError {
-    abstract fun env(): Env
+sealed class KollectError: Throwable() {
+    abstract val env: Env
 }
-//case class NotFound(env: Env, request: KollectOne[_, _]) : KollectError
-//case class MissingIdentities(env: Env, missing: Map[DataSourceName, List[Any]]) : KollectError
-//case class UnhandledException(env: Env, err: Throwable) : KollectError
+data class NotFound(override val env: Env, val request: KollectOne<Any, Any>): KollectError()
+data class MissingIdentities(override val env: Env, val missing: Map<DataSourceName, List<Any>>): KollectError()
+data class UnhandledException(override val env: Env, val err: Throwable): KollectError()
 
 sealed class KollectRequest
 
