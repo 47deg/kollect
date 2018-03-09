@@ -8,7 +8,11 @@ import arrow.higherkind
 
 typealias Kollect<A> = Free<KollectOpHK, A>
 
-sealed class KollectError: Throwable() {
+abstract class NoStackTrace: Throwable() {
+    override fun fillInStackTrace(): Throwable = this
+}
+
+sealed class KollectError: NoStackTrace() {
     abstract val env: Env
 }
 data class NotFound(override val env: Env, val request: KollectOne<Any, Any>): KollectError()
