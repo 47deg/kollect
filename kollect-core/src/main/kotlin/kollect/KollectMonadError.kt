@@ -3,9 +3,6 @@ package kollect
 import arrow.Kind
 import arrow.TC
 import arrow.core.Either
-import arrow.effects.ForIO
-import arrow.effects.IO
-import arrow.effects.monadError
 import arrow.typeclass
 import arrow.typeclasses.MonadError
 
@@ -30,10 +27,4 @@ interface KollectMonadError<F> : MonadError<F, KollectError>, TC {
 
     override fun <A> raiseError(e: KollectError): Kind<F, A> =
             ME().raiseError(e)
-}
-
-object IOKollectMonadErrorInstance : KollectMonadError<ForIO> {
-    override fun ME(): MonadError<ForIO, Throwable> = IO.monadError()
-
-    override fun <A> runQuery(q: Query<A>): Kind<ForIO, A> = TODO()
 }

@@ -66,4 +66,3 @@ interface DataSource<I : Any, A> {
     fun batchExecution(): ExecutionType = Parallel
 }
 
-

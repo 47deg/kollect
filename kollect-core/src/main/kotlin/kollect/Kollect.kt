@@ -8,16 +8,16 @@ import arrow.higherkind
 
 typealias Kollect<A> = Free<ForKollectOp, A>
 
-abstract class NoStackTrace: Throwable() {
+abstract class NoStackTrace : Throwable() {
     override fun fillInStackTrace(): Throwable = this
 }
 
-sealed class KollectError: NoStackTrace() {
+sealed class KollectError : NoStackTrace() {
     abstract val env: Env
 }
-data class NotFound(override val env: Env, val request: KollectOne<Any, Any>): KollectError()
-data class MissingIdentities(override val env: Env, val missing: Map<DataSourceName, List<Any>>): KollectError()
-data class UnhandledException(override val env: Env, val err: Throwable): KollectError()
+data class NotFound(override val env: Env, val request: KollectOne<Any, Any>) : KollectError()
+data class MissingIdentities(override val env: Env, val missing: Map<DataSourceName, List<Any>>) : KollectError()
+data class UnhandledException(override val env: Env, val err: Throwable) : KollectError()
 
 sealed class KollectRequest
 
@@ -42,8 +42,8 @@ data class KollectMany<I : Any, A>(val ids: NonEmptyList<I>, val ds: DataSource<
     override fun identities(): NonEmptyList<I> = ids
 }
 
-data class Concurrent(val queries: NonEmptyList<KollectQuery<Any, Any>>): KollectOp<InMemoryCache>, KollectRequest()
+data class Concurrent(val queries: NonEmptyList<KollectQuery<Any, Any>>) : KollectOp<InMemoryCache>, KollectRequest()
 
-data class Join<A, B>(val fl: Kollect<A>, val fr: Kollect<B>): KollectOp<Tuple2<A, B>>
+data class Join<A, B>(val fl: Kollect<A>, val fr: Kollect<B>) : KollectOp<Tuple2<A, B>>
 
-data class Thrown<A>(val err: Throwable): KollectOp<A>
+data class Thrown<A>(val err: Throwable) : KollectOp<A>
