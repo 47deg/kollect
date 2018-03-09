@@ -46,11 +46,11 @@ interface DataSource<I : Any, A> {
      */
     fun batchingNotSupported(ids: NonEmptyList<I>): Query<Map<I, A>> {
         val fetchOneWithId: (I) -> Query<Option<Tuple2<I, A>>> = { id ->
-            fetchOne(id).map { it.tupleLeft(id).ev() }
+            fetchOne(id).map { it.tupleLeft(id).fix() }
         }
 
         return ids.traverse(fetchOneWithId, Query.applicative())
-                .ev()
+                .fix()
                 .map {
                     it.map { it.orNull() }.all
                             .filterNotNull()

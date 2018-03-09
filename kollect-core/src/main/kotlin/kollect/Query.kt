@@ -14,10 +14,10 @@ typealias QueryErrorback = (Throwable) -> Unit
 
 @higherkind
 @deriving(Functor::class, Applicative::class)
-sealed class Query<A> : QueryKind<A> {
+sealed class Query<A> : QueryOf<A> {
 
-    fun <B> ap(ff: QueryKind<(A) -> B>): Query<B> =
-        Ap(this, ff.ev())
+    fun <B> ap(ff: QueryOf<(A) -> B>): Query<B> =
+        Ap(this, ff.fix())
 
     fun <B> map(f: (A) -> B): Query<B> = ap(pure(f))
 

@@ -1,8 +1,7 @@
 dependencies {
     compile "org.jetbrains.kotlin:kotlin-stdlib-jre7:$kotlinVersion"
     compile "io.arrow-kt:arrow-free:$arrowVersion"
-    compile "io.arrow-kt:arrow-typeclasses:$arrowVersion"
-    compile "io.arrow-kt:arrow-instances:$arrowVersion"
+    compile "io.arrow-kt:arrow-effects:$arrowVersion"
 
     kapt "io.arrow-kt:arrow-annotations-processor:$arrowVersion"
 

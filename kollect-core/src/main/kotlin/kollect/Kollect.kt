@@ -6,7 +6,7 @@ import arrow.data.NonEmptyList
 import arrow.free.Free
 import arrow.higherkind
 
-typealias Kollect<A> = Free<KollectOpHK, A>
+typealias Kollect<A> = Free<ForKollectOp, A>
 
 abstract class NoStackTrace: Throwable() {
     override fun fillInStackTrace(): Throwable = this
