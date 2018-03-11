@@ -27,7 +27,7 @@ data class Round(
  */
 data class KollectEnv(
         override val cache: DataSourceCache,
-        override val rounds: List<Round> = listOf()) : Env {
+        override val rounds: List<Round> = emptyList()) : Env {
 
     override fun evolve(
             newRound: Round,
