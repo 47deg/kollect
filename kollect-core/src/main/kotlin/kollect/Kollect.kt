@@ -1,10 +1,15 @@
 package kollect
 
 import arrow.Kind
+import arrow.core.Eval
 import arrow.core.Tuple2
-import arrow.data.NonEmptyList
+import arrow.data.*
 import arrow.free.*
-import arrow.free.instances.FreeMonadInstance
+import arrow.higherkind
+import arrow.instance
+import arrow.typeclasses.Applicative
+
+typealias Kollect<A> = Free<ForKollectOp, A>
 
 abstract class NoStackTrace : Throwable() {
     override fun fillInStackTrace(): Throwable = this
@@ -29,16 +34,11 @@ interface KollectQuery<I : Any, A> : KollectRequest {
 /**
  * Primitive operations in the Kollect Free monad.
  */
-sealed class KollectOp<out A> : Kind<KollectOp.F, A> {
-
-    class F private constructor()
-
+@higherkind
+sealed class KollectOp<out A> : KollectOpOf<A> {
     data class Thrown<A>(val err: Throwable) : KollectOp<A>()
-
     data class Join<A, B>(val fl: Kollect<A>, val fr: Kollect<B>) : KollectOp<Tuple2<A, B>>()
-
     data class Concurrent(val queries: NonEmptyList<KollectQuery<Any, Any>>) : KollectOp<InMemoryCache>(), KollectRequest
-
     data class KollectOne<I : Any, A>(val id: I, val ds: DataSource<I, A>) : KollectOp<A>(), KollectQuery<I, A> {
         override fun dataSource(): DataSource<I, A> = ds
         override fun identities(): NonEmptyList<I> = NonEmptyList.pure(id)
@@ -51,23 +51,6 @@ sealed class KollectOp<out A> : Kind<KollectOp.F, A> {
 
     companion object {
 
-        val kollectMonad: FreeMonadInstance<F> = object : FreeMonadInstance<F> {
-
-            override fun <A> pure(a: A): Kollect<A> = KollectOp.pure(a)
-
-            override fun <A, B> ap(fa: FreeOf<F, A>, ff: FreeOf<F, (A) -> B>): Free<F, B> =
-                    KollectOp.join(ff.fix(), fa.fix()).map { (f, a) -> f(a) }
-
-            override fun <A, B> map(fa: FreeOf<F, A>, f: (A) -> B): Free<F, B> =
-                    fa.fix().map(f)
-
-            override fun <A, B> product(fa: Kind<FreePartialOf<F>, A>, fb: Kind<FreePartialOf<F>, B>): Kind<FreePartialOf<F>, Tuple2<A, B>> =
-                    KollectOp.join(fa.fix(), fb.fix())
-
-            override fun <A, B, Z> map2(fa: Kind<FreePartialOf<F>, A>, fb: Kind<FreePartialOf<F>, B>, f: (Tuple2<A, B>) -> Z): Kind<FreePartialOf<F>, Z> =
-                    KollectOp.join(fa.fix(), fb.fix()).map(f)
-        }
-
         /**
          * Lift a plain value to the Kollect monad.
          */
@@ -76,7 +59,7 @@ sealed class KollectOp<out A> : Kind<KollectOp.F, A> {
         /**
          * Lift an exception to the Kollect monad.
          */
-        fun <A> error(e: Throwable) = Free.liftF(KollectOp.Thrown<A>(e))
+        fun <A> error(e: Throwable): Free<ForKollectOp, A> = Free.liftF(KollectOp.Thrown(e))
 
         /**
          * Given a value that has a related `DataSource` implementation, lift it
@@ -95,22 +78,46 @@ sealed class KollectOp<out A> : Kind<KollectOp.F, A> {
         /**
          * Transform a list of kollects into a kollect of a list. It implies concurrent execution of kollects.
          */
-        fun <I: Any, A> sequence(ids: List<Kollect<A>>): Kollect<List<A>> = traverse(ids, {x -> x})
+        fun <I : Any, A> sequence(ids: List<Kollect<A>>): Kollect<List<A>> = traverse(ids, { x -> x })
 
         /**
          * Apply a kollect-returning function to every element in a list and return a Kollect of the list of
          * results. It implies concurrent execution of kollects.
          */
         fun <A, B> traverse(ids: List<A>, f: (A) -> Kollect<B>): Kollect<List<B>> =
-            traverseGrouped(ids, 50, f)
+                traverseGrouped(ids, 50, f)
 
-        fun <A, B> traverseGrouped(ids: List<A>, groupLength: Int, f: (A) -> Kollect<B>): Kollect<List<B>> = TODO()
+        fun <A> ListK<A>.grouped(n: Int): ListK<ListK<A>> = TODO()
+
+//        fun <A, B> traverseGrouped(ids: List<A>, groupLength: Int, f: (A) -> Kollect<B>): Kollect<List<B>> {
+//            val L = ListK.traverse()
+//            val matched = ids.k().grouped(groupLength)
+//            return when(matched) {
+//                matched.isEmpty() -> KollectOp.pure(emptyList())
+//                case ids :: Nil => L.traverse(ids)(f)
+//                case groups     =>
+//                // equivalant to groups.flatTraverse(_.traverse(f))
+//                        Eval
+//                L.foldRight[List[A], Fetch[List[B]]](groups, cats.Always(Fetch.pure(Nil))) {
+//                    (idGroup, evalFetchAcc) =>
+//                    fetchApplicative.map2Eval(L.traverse(idGroup)(f), evalFetchAcc)(_ ::: _)
+//                }
+//                        .value
+//            }
+//        }
+
+        object test{
+            val x = Eval.always {  }
+            val y = ListK.foldable().foldRight()
+        }
+
+
 
         /**
          * Apply the given function to the result of the two kollects. It implies concurrent execution of kollects.
          */
         fun <A, B, C> map2(f: (Tuple2<A, B>) -> C, fa: Kollect<A>, fb: Kollect<B>): Kollect<C> =
-                KollectOp.kollectMonad.map2(fa.fix(), fb.fix(), f).fix()
+                KollectOp.kollectApplicative().map2(fa.fix(), fb.fix(), f).fix()
 
         /**
          * Join two kollects from any data sources and return a Kollect that returns a tuple with the two
@@ -122,21 +129,36 @@ sealed class KollectOp<out A> : Kind<KollectOp.F, A> {
         /**
          * Run a `Kollect` with the given cache, returning a pair of the final environment and result in the monad `F`.
          */
-        fun <A> runKollect(fa: Kollect<A>, cache: DataSourceCache = InMemoryCache.empty()): Kind<F, Tuple2<KollectEnv, A>> = TODO()
+        fun <A> runKollect(fa: Kollect<A>, cache: DataSourceCache = InMemoryCache.empty()): Kind<ForKollectOp, Tuple2<KollectEnv, A>> = TODO()
 
         /**
          * Run a `Kollect` with the given cache, returning the final environment in the monad `F`.
          */
-        fun <A> runEnv(fa: Kollect<A>, cache: DataSourceCache = InMemoryCache.empty()): Kind<F, KollectEnv> = TODO()
+        fun <A> runEnv(fa: Kollect<A>, cache: DataSourceCache = InMemoryCache.empty()): Kind<ForKollectOp, KollectEnv> = TODO()
 
         /**
          * Run a `Kollect` with the given cache, the result in the monad `F`.
          */
-        fun <A> run(fa: Kollect<A>, cache: DataSourceCache = InMemoryCache.empty()): Kind<F, A> = TODO()
+        fun <A> run(fa: Kollect<A>, cache: DataSourceCache = InMemoryCache.empty()): Kind<ForKollectOp, A> = TODO()
 
     }
 }
 
-fun <A> Kind<KollectOp.F, A>.fix(): KollectOp<A> = this as KollectOp<A>
+@instance(KollectOp::class)
+interface KollectApplicativeInstance : Applicative<FreePartialOf<ForKollectOp>> {
+    override fun <A, B> ap(fa: FreeOf<ForKollectOp, A>, ff: FreeOf<ForKollectOp, (A) -> B>): Free<ForKollectOp, B> =
+            KollectOp.join(ff.fix(), fa.fix()).map { (f, a) -> f(a) }
 
-typealias Kollect<A> = Free<KollectOp.F, A>
+    override fun <A, B> map(fa: FreeOf<ForKollectOp, A>, f: (A) -> B): Free<ForKollectOp, B> =
+            fa.fix().map(f)
+
+    override fun <A, B, Z> map2(fa: Kind<FreePartialOf<ForKollectOp>, A>, fb: Kind<FreePartialOf<ForKollectOp>, B>, f: (Tuple2<A, B>) -> Z): Kind<FreePartialOf<ForKollectOp>, Z> =
+            KollectOp.join(fa.fix(), fb.fix()).map(f)
+
+    override fun <A, B> product(fa: Kind<FreePartialOf<ForKollectOp>, A>, fb: Kind<FreePartialOf<ForKollectOp>, B>): Kind<FreePartialOf<ForKollectOp>, Tuple2<A, B>> =
+            KollectOp.join(fa.fix(), fb.fix())
+
+    override fun <A> pure(a: A): Free<ForKollectOp, A> =
+            KollectOp.pure(a)
+}
+
