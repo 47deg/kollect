@@ -1,13 +1,13 @@
 package kollect
 
 import arrow.Kind
-import arrow.core.Eval
-import arrow.core.Tuple2
+import arrow.core.*
 import arrow.data.*
 import arrow.free.*
 import arrow.higherkind
 import arrow.instance
 import arrow.typeclasses.Applicative
+import arrow.typeclasses.Monad
 
 typealias Kollect<A> = Free<ForKollectOp, A>
 
@@ -109,7 +109,27 @@ sealed class KollectOp<out A> : KollectOpOf<A> {
         object test{
             val x = Eval.always {  }
             val y = ListK.foldable().foldRight()
+
+            val t = {
+                val program: Kollect<Int> = KollectOp.pure(1)
+                val interpreter: FunctionK<ForKollectOp, ForOption> =
+                        object : FunctionK<ForKollectOp, ForOption> {
+                            override fun <A> invoke(fa: Kind<ForKollectOp, A>): Kind<ForOption, A> {
+                                val input = fa.fix()
+                                return when (input) {
+                                    is KollectOp.Thrown -> TODO()
+                                    is KollectOp.Join -> TODO()
+                                    is KollectOp.Concurrent -> TODO()
+                                    is KollectOp.KollectOne -> TODO()
+                                    is KollectOp.KollectMany -> TODO()
+                                } as Kind<ForOption, A>
+                            }
+                        }
+                val result: Option<Int> = program.foldMap(interpreter, Option.monad()).fix()
+            }
+
         }
+
 
 
 
@@ -161,4 +181,5 @@ interface KollectApplicativeInstance : Applicative<FreePartialOf<ForKollectOp>> 
     override fun <A> pure(a: A): Free<ForKollectOp, A> =
             KollectOp.pure(a)
 }
+
 
