@@ -7,7 +7,6 @@ import arrow.free.*
 import arrow.higherkind
 import arrow.instance
 import arrow.typeclasses.Applicative
-import arrow.typeclasses.Monad
 
 typealias Kollect<A> = Free<ForKollectOp, A>
 
@@ -87,51 +86,29 @@ sealed class KollectOp<out A> : KollectOpOf<A> {
         fun <A, B> traverse(ids: List<A>, f: (A) -> Kollect<B>): Kollect<List<B>> =
                 traverseGrouped(ids, 50, f)
 
-        fun <A> ListK<A>.grouped(n: Int): ListK<ListK<A>> = TODO()
+        fun <A> ListK<A>.grouped(n: Int): ListK<ListK<A>> =
+            withIndex()
+                    .groupBy { it.index / n }
+                    .map { it.value.k().map { it.value } }.k()
 
-//        fun <A, B> traverseGrouped(ids: List<A>, groupLength: Int, f: (A) -> Kollect<B>): Kollect<List<B>> {
-//            val L = ListK.traverse()
-//            val matched = ids.k().grouped(groupLength)
-//            return when(matched) {
-//                matched.isEmpty() -> KollectOp.pure(emptyList())
-//                case ids :: Nil => L.traverse(ids)(f)
-//                case groups     =>
-//                // equivalant to groups.flatTraverse(_.traverse(f))
-//                        Eval
-//                L.foldRight[List[A], Fetch[List[B]]](groups, cats.Always(Fetch.pure(Nil))) {
-//                    (idGroup, evalFetchAcc) =>
-//                    fetchApplicative.map2Eval(L.traverse(idGroup)(f), evalFetchAcc)(_ ::: _)
-//                }
-//                        .value
-//            }
-//        }
 
-        object test{
-            val x = Eval.always {  }
-            val y = ListK.foldable().foldRight()
 
-            val t = {
-                val program: Kollect<Int> = KollectOp.pure(1)
-                val interpreter: FunctionK<ForKollectOp, ForOption> =
-                        object : FunctionK<ForKollectOp, ForOption> {
-                            override fun <A> invoke(fa: Kind<ForKollectOp, A>): Kind<ForOption, A> {
-                                val input = fa.fix()
-                                return when (input) {
-                                    is KollectOp.Thrown -> TODO()
-                                    is KollectOp.Join -> TODO()
-                                    is KollectOp.Concurrent -> TODO()
-                                    is KollectOp.KollectOne -> TODO()
-                                    is KollectOp.KollectMany -> TODO()
-                                } as Kind<ForOption, A>
-                            }
-                        }
-                val result: Option<Int> = program.foldMap(interpreter, Option.monad()).fix()
+        fun <A, B> traverseGrouped(ids: List<A>, groupLength: Int, f: (A) -> Kollect<B>): Kollect<List<B>> {
+            val L = ListK.traverse()
+            val matched = ids.k().grouped(groupLength)
+
+            fun foldOp(l: List<A>, evalKollectAcc: Eval<Kollect<List<B>>>): Eval<Kollect<List<B>>> =
+                    KollectOp.kollectApplicative().map2Eval(
+                            L.traverse(l.k(), f, KollectOp.kollectApplicative()).fix(),
+                            evalKollectAcc,
+                            { tuple -> tuple.a.fix().plus(tuple.b) }).map { it.fix() }
+
+            return when {
+                matched.isEmpty() -> KollectOp.pure(emptyList())
+                matched.size == 1 -> L.traverse(matched.first().k(), f, KollectOp.kollectApplicative()).fix()
+                else -> L.foldRight(matched, Eval.always({ KollectOp.pure(emptyList<B>()) }), { l, e -> foldOp(l, e) }).value()
             }
-
         }
-
-
-
 
         /**
          * Apply the given function to the result of the two kollects. It implies concurrent execution of kollects.
